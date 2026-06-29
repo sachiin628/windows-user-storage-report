@@ -1,52 +1,43 @@
-# Windows User Storage Report
+# Windows User Storage Report & Cleanup Toolkit
 
-A simple PowerShell script that scans every user profile on the `C:\` drive and reports how much disk space (in GB) each user is consuming — broken down by Desktop, Downloads, Documents, AppData, and individual browser data (Chrome, Edge, Firefox).
+A small collection of PowerShell scripts for monitoring and maintaining disk space on Windows machines (PCs or servers) with multiple user profiles. Useful for IT admins, sysadmins, or anyone managing a shared/multi-user Windows system.
 
-Useful for quickly finding out **which user account** and **which folder** is eating up your disk space.
+## Scripts in this repo
 
-## What it reports
+| Script | Purpose |
+|---|---|
+| [`Get-UserStorageReport.ps1`](#1-get-userstoragereportps1--storage-report) | Reports how much disk space each user account is using (Desktop, Downloads, Documents, AppData, browser data) |
+| [`Clear-ServerCache.ps1`](#2-clear-servercacheps1--cache-cleanup) | Safely cleans browser cache, temp files, and Recycle Bin for all users to free up space |
 
-For every user folder under `C:\Users`, the script calculates:
+Together, you can run the report script to **find** what's eating space, then run the cleanup script to **reclaim** it — and automate the cleanup on a schedule.
 
-| Column        | What it measures                                      |
-|----------------|--------------------------------------------------------|
-| `TotalGB`      | Total size of the user's entire profile folder         |
-| `DesktopGB`    | Size of the Desktop folder                              |
-| `DownloadsGB`  | Size of the Downloads folder                             |
-| `DocumentsGB`  | Size of the Documents folder                              |
-| `AppDataGB`    | Size of the entire AppData folder                          |
-| `ChromeGB`     | Size of Chrome's `User Data` folder (cache, profiles, etc.) |
-| `EdgeGB`       | Size of Edge's `User Data` folder                            |
-| `FirefoxGB`    | Size of Firefox's profile folder                               |
+---
 
-Results are displayed as a table, sorted by `TotalGB` in descending order — so the heaviest user shows up first.
+## 1. `Get-UserStorageReport.ps1` — Storage Report
 
-## Requirements
+Scans every user profile on `C:\` and reports storage usage (in GB), broken down by:
 
-- Windows 10 / 11
-- PowerShell 5.1 or later (built into Windows)
-- Run as **Administrator** is recommended, so the script can read other users' folders without permission errors
+| Column | What it measures |
+|---|---|
+| `TotalGB` | Total size of the user's entire profile folder |
+| `DesktopGB` | Size of the Desktop folder |
+| `DownloadsGB` | Size of the Downloads folder |
+| `DocumentsGB` | Size of the Documents folder |
+| `AppDataGB` | Size of the entire AppData folder |
+| `ChromeGB` | Size of Chrome's `User Data` folder |
+| `EdgeGB` | Size of Edge's `User Data` folder |
+| `FirefoxGB` | Size of Firefox's profile folder |
 
-## How to use
+Results print as a table sorted by `TotalGB` descending — the heaviest user appears first.
 
-1. Download `Get-UserStorageReport.ps1` from this repository.
-2. Open **PowerShell as Administrator**.
-3. Navigate to the folder where you saved the script:
-   ```powershell
-   cd "C:\path\to\downloaded\script"
-   ```
-4. If script execution is blocked, allow it for this session:
-   ```powershell
-   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-   ```
-5. Run the script:
-   ```powershell
-   .\Get-UserStorageReport.ps1
-   ```
-6. A table will print showing storage usage for every user, sorted by total size.
+### Usage
+```powershell
+cd "C:\path\to\script"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\Get-UserStorageReport.ps1
+```
 
-## Example output
-
+### Example output
 ```
 User      TotalGB DesktopGB DownloadsGB DocumentsGB AppDataGB ChromeGB EdgeGB FirefoxGB
 ----      ------- --------- ----------- ----------- --------- -------- ------ ---------
@@ -54,11 +45,75 @@ John      45.32   2.1       18.4        3.2         21.6      12.3     4.1    0.
 Priya     12.05   0.5       3.2         1.1         7.25      5.4      1.2    0.0
 ```
 
+---
+
+## 2. `Clear-ServerCache.ps1` — Cache Cleanup
+
+A **safe** cleanup script — it only removes temporary/cache data and never touches personal files, documents, or saved browser data (bookmarks, passwords, history, etc.).
+
+For every user profile, it clears:
+- Google Chrome cache
+- Microsoft Edge cache
+- Firefox cache (`cache2` folder)
+- User Temp folder (`AppData\Local\Temp`)
+
+It then clears:
+- Windows System Temp (`C:\Windows\Temp`)
+- Recycle Bin
+
+### Usage
+```powershell
+cd "C:\path\to\script"
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\Clear-ServerCache.ps1
+```
+
+### Automating with Task Scheduler
+
+To run this cleanup automatically (e.g. weekly, or every night on a server):
+
+1. Open **Task Scheduler** → **Create Task** (not "Basic Task", so you get full options).
+2. **General tab:**
+   - Name: `Server Cache Cleanup`
+   - Select **Run whether user is logged on or not**
+   - Check **Run with highest privileges** (required to clean other users' folders and system temp)
+3. **Triggers tab → New:**
+   - Set your schedule (e.g. Weekly, every Sunday at 2:00 AM)
+4. **Actions tab → New:**
+   - Action: **Start a program**
+   - Program/script:
+     ```
+     powershell.exe
+     ```
+   - Add arguments:
+     ```
+     -ExecutionPolicy Bypass -File "C:\Scripts\Clear-ServerCache.ps1"
+     ```
+   - (Adjust the path to wherever you save the script on the server)
+5. **Conditions / Settings tabs:** adjust as needed (e.g. allow it to run on battery if it's a laptop).
+6. Click **OK**, enter admin credentials when prompted, and the task is now scheduled.
+
+You can test it immediately by right-clicking the task → **Run**, and checking the script's console output (redirect it to a log file if you want a history — see note below).
+
+> **Tip:** To keep a log of each run, change the Action arguments to:
+> ```
+> -ExecutionPolicy Bypass -File "C:\Scripts\Clear-ServerCache.ps1" >> "C:\Scripts\cleanup-log.txt" 2>&1
+> ```
+
+---
+
+## Requirements
+
+- Windows 10 / 11 or Windows Server
+- PowerShell 5.1 or later (built into Windows)
+- Run as **Administrator** (required for both scripts to access other users' folders and system-level paths)
+
 ## Notes
 
-- The script ignores `Public`, `Default`, and `All Users` system folders since these aren't real user accounts.
-- Folders that don't exist (e.g. a user never installed Firefox) simply report `0`.
-- Large `AppData` or browser sizes are usually caused by cache, extensions, or sync data and can often be safely cleaned up via each browser's own settings.
+- Both scripts skip `Public`, `Default`, and `All Users` system folders since these aren't real user accounts.
+- Folders that don't exist (e.g. a user never installed Firefox) are simply skipped/reported as `0`.
+- `Clear-ServerCache.ps1` is intentionally conservative — it does not delete browser profiles, saved passwords, bookmarks, or any non-cache data.
+- Always test scripts on a non-production machine first before scheduling them on a live server.
 
 ## License
 
